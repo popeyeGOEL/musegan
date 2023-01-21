@@ -99,10 +99,15 @@ def load_training_data(params, config):
         config['use_random_transpose'], config['n_jobs'])
 
     # Create iterator
+    # if params['is_conditional']:
+    #     train_x, train_y = dataset.make_one_shot_iterator().get_next()
+    # else:
+    #     train_x, train_y = dataset.make_one_shot_iterator().get_next(), None
+
     if params['is_conditional']:
-        train_x, train_y = dataset.make_one_shot_iterator().get_next()
+        train_x, train_y = tf.compat.v1.data.make_one_shot_iterator(dataset).get_next()
     else:
-        train_x, train_y = dataset.make_one_shot_iterator().get_next(), None
+        train_x, train_y = tf.compat.v1.data.make_one_shot_iterator(dataset).get_next(), None
 
     return train_x, train_y
 
@@ -187,13 +192,13 @@ def main():
     def get_n_params(var_list):
         """Return the number of variables in a variable list."""
         return int(np.sum([np.product(
-            [x.value for x in var.get_shape()]) for var in var_list]))
+            [x for x in var.shape.as_list()]) for var in var_list]))
 
     LOGGER.info("Number of trainable parameters in {}: {:,}".format(
-        model.name, get_n_params(tf.trainable_variables(model.name))))
+        model.name, get_n_params(tf.compat.v1.trainable_variables(model.name))))
     for component in model.components:
         LOGGER.info("Number of trainable parameters in {}: {:,}".format(
-            component.name, get_n_params(tf.trainable_variables(
+            component.name, get_n_params(tf.compat.v1.trainable_variables(
                 model.name + '/' + component.name))))
 
     # ================================ Sampler =================================
@@ -213,11 +218,11 @@ def main():
             'collect_save_pianorolls_op': config['save_pianoroll_samples']}
 
         # Get prediction nodes
-        placeholder_z = tf.placeholder(tf.float32, shape=sample_z.shape)
+        placeholder_z = tf.compat.v1.placeholder(tf.float32, shape=sample_z.shape)
         placeholder_y = None
         if params.get('is_accompaniment'):
             c_shape = np.append(sample_x.shape[:-1], 1)
-            placeholder_c = tf.placeholder(tf.float32, shape=c_shape)
+            placeholder_c = tf.compat.v1.placeholder(tf.float32, shape=c_shape)
             predict_nodes = model(
                 z=placeholder_z, y=placeholder_y, c=placeholder_c,
                 mode='predict', params=params, config=sampler_config)
@@ -245,13 +250,13 @@ def main():
 
     # ========================== Training Preparation ==========================
     # Get tensorflow session config
-    tf_config = tf.ConfigProto()
+    tf_config = tf.compat.v1.ConfigProto()
     tf_config.gpu_options.allow_growth = True
 
     # Training hooks
-    global_step = tf.train.get_global_step()
+    global_step = tf.compat.v1.train.get_global_step()
     steps_per_iter = config['n_dis_updates_per_gen_update'] + 1
-    hooks = [tf.train.NanTensorHook(train_nodes['loss'])]
+    hooks = [tf.compat.v1.train.NanTensorHook(train_nodes['loss'])]
 
     # Tensor logger
     tensor_logger = {
@@ -262,14 +267,14 @@ def main():
 
     # ======================= Monitored Training Session =======================
     LOGGER.info("Training start.")
-    with tf.train.MonitoredTrainingSession(
+    with tf.compat.v1.train.MonitoredTrainingSession(
         save_checkpoint_steps=config['save_checkpoint_steps'] * steps_per_iter,
         save_summaries_steps=config['save_summaries_steps'] * steps_per_iter,
         checkpoint_dir=config['model_dir'], log_step_count_steps=0,
         hooks=hooks, config=tf_config) as sess:
 
         # Get global step value
-        step = tf.train.global_step(sess, global_step)
+        step = tf.compat.v1.train.global_step(sess, global_step)
         if step == 0:
             step_logger.write('# step, gen_loss, dis_loss\n')
 

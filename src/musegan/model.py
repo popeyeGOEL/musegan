@@ -10,16 +10,18 @@ from musegan.losses import get_adv_losses
 from musegan.utils import load_component, make_sure_path_exists
 LOGGER = logging.getLogger(__name__)
 
+tf.compat.v1.disable_eager_execution()
+
 def get_scheduled_variable(start_value, end_value, start_step, end_step):
     """Return a scheduled decayed/growing variable."""
     if start_step > end_step:
         raise ValueError("`start_step` must be smaller than `end_step`.")
     if start_step == end_step:
         return tf.constant(start_value)
-    global_step = tf.train.get_or_create_global_step()
+    global_step = tf.compat.v1.train.get_or_create_global_step()
     zero_step = tf.constant(0, dtype=global_step.dtype)
     schedule_step = tf.maximum(zero_step, global_step - start_step)
-    return tf.train.polynomial_decay(
+    return tf.compat.v1.train.polynomial_decay(
         start_value, schedule_step, end_step - start_step, end_value)
 
 class Model:
@@ -27,7 +29,7 @@ class Model:
     def __init__(self, params, name='Model'):
         self.name = name
 
-        with tf.variable_scope(self.name, reuse=tf.AUTO_REUSE) as scope:
+        with tf.compat.v1.variable_scope(self.name, reuse=tf.compat.v1.AUTO_REUSE) as scope:
 
             # Save the variable scope object
             self.scope = scope
@@ -69,25 +71,25 @@ class Model:
                         config=None):
         """Return a dictionary of graph nodes for training."""
         LOGGER.info("Building training nodes.")
-        with tf.variable_scope(self.name, reuse=tf.AUTO_REUSE) as scope:
+        with tf.compat.v1.variable_scope(self.name, reuse=tf.compat.v1.AUTO_REUSE) as scope:
 
             nodes = {}
 
             # Get or create global step
-            global_step = tf.train.get_or_create_global_step()
-            nodes['gen_step'] = tf.get_variable(
+            global_step = tf.compat.v1.train.get_or_create_global_step()
+            nodes['gen_step'] = tf.compat.v1.get_variable(
                 'gen_step', [], tf.int32, tf.constant_initializer(0),
                 trainable=False)
 
             # Set default latent distribution if not given
             if z is None:
-                nodes['z'] = tf.truncated_normal((
+                nodes['z'] = tf.compat.v1.truncated_normal((
                     config['batch_size'], params['latent_dim']))
             else:
                 nodes['z'] = z
 
             # Get slope tensor (for straight-through estimators)
-            nodes['slope'] = tf.get_variable(
+            nodes['slope'] = tf.compat.v1.get_variable(
                 'slope', [], tf.float32, tf.constant_initializer(1.0),
                 trainable=False)
 
@@ -127,11 +129,11 @@ class Model:
 
             # --- Gradient penalties -------------------------------------------
             if config['use_gradient_penalties']:
-                eps_x = tf.random_uniform(
+                eps_x = tf.compat.v1.random_uniform(
                     [config['batch_size']] + [1] * len(params['data_shape']))
                 inter_x = eps_x * x + (1.0 - eps_x) * nodes['fake_x']
                 dis_x_inter_out = self.dis(inter_x, y, True)
-                gradient_x = tf.gradients(dis_x_inter_out, inter_x)[0]
+                gradient_x = tf.compat.v1.gradients(dis_x_inter_out, inter_x)[0]
                 slopes_x = tf.sqrt(1e-8 + tf.reduce_sum(
                     tf.square(gradient_x),
                     np.arange(1, gradient_x.get_shape().ndims)))
@@ -144,7 +146,7 @@ class Model:
             # ========================== Training ops ==========================
             LOGGER.info("Building training ops.")
             # --- Learning rate decay ------------------------------------------
-            nodes['learning_rate'] = tf.get_variable(
+            nodes['learning_rate'] = tf.compat.v1.get_variable(
                 'learning_rate', [], tf.float32,
                 tf.constant_initializer(config['initial_learning_rate']),
                 trainable=False)
@@ -154,15 +156,15 @@ class Model:
                     config['learning_rate_schedule']['end_value'],
                     config['learning_rate_schedule']['start'],
                     config['learning_rate_schedule']['end'])
-                tf.add_to_collection(
-                    tf.GraphKeys.UPDATE_OPS,
-                    tf.assign(nodes['learning_rate'], scheduled_learning_rate))
+                tf.compat.v1.add_to_collection(
+                    tf.compat.v1.GraphKeys.UPDATE_OPS,
+                    tf.compat.v1.assign(nodes['learning_rate'], scheduled_learning_rate))
 
             # --- Optimizers ---------------------------------------------------
-            gen_opt = tf.train.AdamOptimizer(
+            gen_opt = tf.compat.v1.train.AdamOptimizer(
                 nodes['learning_rate'], config['adam']['beta1'],
                 config['adam']['beta2'])
-            dis_opt = tf.train.AdamOptimizer(
+            dis_opt = tf.compat.v1.train.AdamOptimizer(
                 nodes['learning_rate'], config['adam']['beta1'],
                 config['adam']['beta2'])
 
@@ -171,15 +173,15 @@ class Model:
             # Training op for the discriminator
             nodes['train_ops']['dis'] = dis_opt.minimize(
                 nodes['dis_loss'], global_step,
-                tf.trainable_variables(scope.name + '/' + self.dis.name))
+                tf.compat.v1.trainable_variables(scope.name + '/' + self.dis.name))
 
             # Training ops for the generator
-            update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-            gen_step_increment = tf.assign_add(nodes['gen_step'], 1)
+            update_ops = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.UPDATE_OPS)
+            gen_step_increment = tf.compat.v1.assign_add(nodes['gen_step'], 1)
             with tf.control_dependencies(update_ops + [gen_step_increment]):
                 nodes['train_ops']['gen'] = gen_opt.minimize(
                     nodes['gen_loss'], global_step,
-                    tf.trainable_variables(scope.name + '/' + self.gen.name))
+                    tf.compat.v1.trainable_variables(scope.name + '/' + self.gen.name))
 
             # =========================== Summaries ============================
             LOGGER.info("Building summaries.")
@@ -201,12 +203,12 @@ class Model:
                           config=None):
         """Return a dictionary of graph nodes for training."""
         LOGGER.info("Building prediction nodes.")
-        with tf.variable_scope(self.name, reuse=tf.AUTO_REUSE):
+        with tf.compat.v1.variable_scope(self.name, reuse=tf.compat.v1.AUTO_REUSE):
 
             nodes = {'z': z}
 
             # Get slope tensor (for straight-through estimators)
-            nodes['slope'] = tf.get_variable(
+            nodes['slope'] = tf.compat.v1.get_variable(
                 'slope', [], tf.float32, tf.constant_initializer(1.0),
                 trainable=False)
 
@@ -255,7 +257,7 @@ class Model:
 
                 save_array_ops = []
                 for key, value in arrays.items():
-                    save_array_ops.append(tf.py_func(
+                    save_array_ops.append(tf.compat.v1.py_func(
                         lambda array, suffix, k=key: _save_array(
                             array, suffix, k),
                         [value, config['suffix']], tf.int32))
@@ -303,11 +305,11 @@ class Model:
 
                 save_image_ops = []
                 for key, value in images.items():
-                    save_image_ops.append(tf.py_func(
+                    save_image_ops.append(tf.compat.v1.py_func(
                         lambda array, suffix, k=key: _save_images(
                             array, suffix, k),
                         [value, config['suffix']], tf.int32))
-                    save_image_ops.append(tf.py_func(
+                    save_image_ops.append(tf.compat.v1.py_func(
                         lambda array, suffix, k=key: _save_colored_images(
                             array, suffix, k + '_colored'),
                         [value, config['suffix']], tf.int32))
@@ -342,7 +344,7 @@ class Model:
 
                 save_pianoroll_ops = []
                 for key, value in pianorolls.items():
-                    save_pianoroll_ops.append(tf.py_func(
+                    save_pianoroll_ops.append(tf.compat.v1.py_func(
                         lambda array, suffix, k=key:
                         _save_pianoroll(array, suffix, k),
                         [value, config['suffix']], tf.int32))

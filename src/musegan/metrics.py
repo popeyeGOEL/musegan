@@ -31,7 +31,7 @@ def n_pitches_used(tensor):
     """Return the number of unique pitches used per bar."""
     if tensor.get_shape().ndims != 5:
         raise ValueError("Input tensor must have 5 dimensions.")
-    return tf.reduce_mean(tf.reduce_sum(tf.count_nonzero(tensor, 3), 2), [0, 1])
+    return tf.reduce_mean(tf.reduce_sum(tf.compat.v1.count_nonzero(tensor, 3), 2), [0, 1])
 
 def qualified_note_rate(tensor, threshold=2):
     """Return the ratio of the number of the qualified notes (notes longer than
@@ -58,7 +58,7 @@ def qualified_note_rate(tensor, threshold=2):
                              for i in range(n_tracks)], np.float32)
         with np.errstate(divide='ignore', invalid='ignore'):
             return n_qualified_notes / n_onsets
-    return tf.py_func(lambda array: _qualified_note_rate(array, threshold),
+    return tf.compat.v1.py_func(lambda array: _qualified_note_rate(array, threshold),
                       [tensor], tf.float32)
 
 def polyphonic_rate(tensor, threshold=2):
@@ -66,7 +66,7 @@ def polyphonic_rate(tensor, threshold=2):
     being played is larger than `threshold` to the total number of time steps"""
     if tensor.get_shape().ndims != 5:
         raise ValueError("Input tensor must have 5 dimensions.")
-    n_poly = tf.count_nonzero((tf.count_nonzero(tensor, 3) > threshold), 2)
+    n_poly = tf.compat.v1.count_nonzero((tf.compat.v1.count_nonzero(tensor, 3) > threshold), 2)
     return tf.reduce_mean((n_poly / tensor.get_shape()[2]), [0, 1])
 
 def drum_in_pattern_rate(tensor):
@@ -103,7 +103,7 @@ def drum_in_pattern_rate(tensor):
     drum_pattern_mask = tf.constant(
         drum_pattern_mask.reshape(1, 1, tensor.get_shape()[2]), tf.float32)
     n_in_pattern = tf.reduce_sum(drum_pattern_mask * tf.reduce_sum(tensor, 3))
-    n_notes = tf.count_nonzero(tensor, dtype=tf.float32)
+    n_notes = tf.compat.v1.count_nonzero(tensor, dtype=tf.float32)
     return tf.cond((n_notes > 0), lambda: (n_in_pattern / n_notes), lambda: 0.)
 
 def in_scale_rate(tensor):
@@ -200,7 +200,7 @@ def get_save_metric_ops(tensor, beat_resolution, step, result_dir, suffix=None):
 
     save_metric_ops = {}
     for key, value in metric_ops.items():
-        save_metric_ops[key] = tf.py_func(
+        save_metric_ops[key] = tf.compat.v1.py_func(
             lambda array, step, k=key: _save_array(array, step, k),
             [value, step], tf.int32)
 
