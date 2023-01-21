@@ -77,13 +77,13 @@ def main():
     LOGGER.info("Using configurations:\n%s", pformat(config))
 
     # ============================== Placeholders ==============================
-    placeholder_x = tf.placeholder(
+    placeholder_x = tf.compat.v1.placeholder(
         tf.float32, shape=([None] + params['data_shape']))
-    placeholder_z = tf.placeholder(
+    placeholder_z = tf.compat.v1.placeholder(
         tf.float32, shape=(None, params['latent_dim']))
-    placeholder_c = tf.placeholder(
+    placeholder_c = tf.compat.v1.placeholder(
         tf.float32, shape=([None] + params['data_shape'][:-1] + [1]))
-    placeholder_suffix = tf.placeholder(tf.string)
+    placeholder_suffix = tf.compat.v1.placeholder(tf.string)
 
     # ================================= Model ==================================
     # Create sampler configurations
@@ -125,14 +125,14 @@ def main():
 
     # ========================== Session Preparation ===========================
     # Get tensorflow session config
-    tf_config = tf.ConfigProto()
+    tf_config = tf.compat.v1.ConfigProto()
     tf_config.gpu_options.allow_growth = True
 
     # Create saver to restore variables
-    saver = tf.train.Saver()
+    saver = tf.compat.v1.train.Saver()
 
     # =========================== Tensorflow Session ===========================
-    with tf.Session(config=tf_config) as sess:
+    with tf.compat.v1.Session(config=tf_config) as sess:
 
         # Restore the latest checkpoint
         LOGGER.info("Restoring the latest checkpoint.")
